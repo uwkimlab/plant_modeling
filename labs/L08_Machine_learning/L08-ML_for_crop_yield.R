@@ -91,7 +91,7 @@ abline(a = 0, b = 1, col = "red")
 #install.packages("tensorflow")
 #install.packages("keras")
 #install.packages("tfdatasets")
-install_tensorflow()
+#install_tensorflow()
 
 library(tensorflow)
 library(keras)
