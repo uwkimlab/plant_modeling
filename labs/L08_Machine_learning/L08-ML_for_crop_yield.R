@@ -1,6 +1,6 @@
 ##### SEFS508: Plant Modeling #####
 # Lab08: Machine learning for crop yield predictions
-# Last modified: 17 Nov 2020 by Soo-Hyung Kim
+# Last modified: 12 Nov 2021
 
 # Set working directory to source file location (in Session menu)
 
@@ -46,9 +46,9 @@ plot(crop.traindf$obs_yield, crop.glm$fitted.values, main = "Multiple Linear Reg
 abline(lm(crop.glm$fitted.values ~ crop.traindf$obs_yield, data = crop.traindf), col = "blue")
 abline(a = 0, b = 1, col = "red")
 
-# model testing and plot test result
+# model evaluation with independent data and plot the result
 crop.glm.test.pred<-predict(crop.glm, newdata = crop.testdf)
-plot(crop.testdf$obs_yield, crop.glm.test.pred, main = "Multiple Linear Regression: Testing",
+plot(crop.testdf$obs_yield, crop.glm.test.pred, main = "Multiple Linear Regression: Evaluation",
      xlab = "Observed (tons/ha)", ylab = "Predicted (tons/ha)",
      pch = 1, frame = FALSE)
 abline(lm(crop.glm.test.pred ~ crop.testdf$obs_yield, data = crop.testdf), col = "blue")
@@ -71,8 +71,9 @@ plot(crop.traindf$obs_yield, crop.rf$predicted, main = "Random Forests: Training
 abline(lm(crop.rf$predicted ~ crop.traindf$obs_yield, data = crop.traindf), col = "blue")
 abline(a = 0, b = 1, col = "red")
 
-# RF model testing and plot result
+# RF model evaluation with independent data
 crop.rf.test.pred <-predict(crop.rf, newdata = crop.testdf)
+# Plot evaluation result
 plot(crop.testdf$obs_yield, crop.rf.test.pred, main = "Random Forests: Testing",
      xlab = "Observed (tons/ha)", ylab = "Predicted (tons/ha)",
      pch = 1, frame = FALSE)
@@ -85,18 +86,35 @@ abline(a = 0, b = 1, col = "red")
 # See: https://docs.conda.io/en/latest/miniconda.html
 # Or install/update TensorFlow package of your Python environment separately.
 # see: https://www.tensorflow.org/install 
-# Code below is based on the regressio tutorial at:
+# For RStudio installation: https://tensorflow.rstudio.com/installation/
+# Code below is based on the regression tutorial at:
 # https://tensorflow.rstudio.com/tutorials/beginners/basic-ml/
 
 #install.packages("tensorflow")
 #install.packages("keras")
 #install.packages("tfdatasets")
-#install_tensorflow()
+#install.packages("progress")
+#install.packages("reticulate") # This is likely to have been installed already.
 
 library(tensorflow)
 library(keras)
 library(tfdatasets)
+library(progress)
+library(reticulate)
+# If needed, install miniconda in RStudio environment.
+# This step may be necessary, if you get an error that a Python env is not found.
 
+#install_miniconda() # install miniconda if not installed.
+miniconda_path() # install miniconda path if installed.
+#miniconda_update() # update miniconda
+
+# if first time to run TensorFlow, run the next two lines.
+# install_tensorflow()
+# install_keras()
+# you need to install tensorflow only once. Once installed, comment the above two lines. 
+
+# Test if installed properly
+tf$constant("Hellow Tensorflow")
 
 # normalize driving variables to scale their effects
 spec <- feature_spec(crop.traindf, obs_yield ~ . ) %>% 
@@ -148,7 +166,7 @@ model <- build_model()
 history <- model %>% fit(
   x = crop.traindf %>% select(-obs_yield),
   y = crop.traindf$obs_yield,
-  epochs = 100,
+  epochs = 500,
   validation_split = 0.2,
   verbose = 0,
   callbacks = list(print_dot_callback)
@@ -204,5 +222,5 @@ write.csv(cbind(crop.traindf, crop.rf$predicted, crop.glm$fitted.values, crop.dn
 write.csv(cbind(crop.testdf, crop.glm.test.pred, crop.rf.test.pred, crop.dnn.test.pred), file = "crop_test_results.csv")
 
 ##### Silage Corn Data for the same region used in Jeong et al. (2016) ##### 
-#silage<-read.table(file="./L08_silage.csv", sep= ",", header = T)
+#silage<-read.table(file="./L08-silage.csv", sep= ",", header = T)
 
