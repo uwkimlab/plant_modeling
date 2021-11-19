@@ -131,7 +131,7 @@ spec
 layer <- layer_dense_features(
   feature_columns = dense_features(spec), 
   dtype = tf$float32)
-layer(crop.traindf)
+layer(dict(crop.traindf))
 
 #summary(model)
 
