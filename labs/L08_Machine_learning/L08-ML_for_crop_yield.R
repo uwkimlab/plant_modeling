@@ -101,11 +101,15 @@ library(keras)
 library(tfdatasets)
 library(progress)
 library(reticulate)
+
+# Use local python
+use_python("/opt/conda/bin/python")
+
 # If needed, install miniconda in RStudio environment.
 # This step may be necessary, if you get an error that a Python env is not found.
 
 #install_miniconda() # install miniconda if not installed.
-miniconda_path() # install miniconda path if installed.
+#miniconda_path() # install miniconda path if installed.
 #miniconda_update() # update miniconda
 
 # if first time to run TensorFlow, run the next two lines.
