@@ -1,17 +1,50 @@
 ##### SEFS508: Plant Modeling #####
 # Lab08: Machine learning for crop yield predictions
-# Last modified: 12 Nov 2021
+# Last modified: 22 Nov 2022 by Soo-Hyung Kim
 
 # Set working directory to source file location (in Session menu)
 
-#install.packages("randomForest")
-#install.packages("hydroGOF")
-#install.packages("tidyverse")
+# install.packages("randomForest")
+# install.packages("hydroGOF")
+# install.packages("tidyverse")
+# install.packages("tidymodels")
+# install.packages("skimr")
 
 library(randomForest) # random forest CART package
 library(hydroGOF) # this library provides a variety of model performance stats
 library(dplyr) # data plier 
 library(ggplot2) # popular plotting package
+library(skimr)
+library(tidyverse)
+library(tidymodels)
+
+##### DNN Preparation #####################
+# Install and load Tensorflow and other packages for using DNN in RStudio 
+# install.packages("tensorflow")
+# install.packages("keras")
+# install.packages("reticulate") # This is likely to have been installed already.
+
+# If Python is not installed in your machine, uncomment and run the next two lines
+#path_to_python <- install_python()
+#virtualenv_create("r-reticulate", python = path_to_python)
+
+#If Python is already installed, run and create a virtual environment for Tensorflow
+library(reticulate)
+virtualenv_create("r-reticulate")
+
+# if first time to run a session of this code, run the next four lines.
+ # library(tensorflow)
+ # library(keras)
+ # install_tensorflow(envname = "r-reticulate")
+ # install_keras(envname = "r-reticulate")
+# If you ran the above 4 lines to install Tensorflow and keras,
+# your R session would have restarted. Once it's done comment out the 4 lines
+
+library(tensorflow)
+library(keras)
+# Test if Tensorflow is installed properly
+tf$constant("Hello Tensorflow")
+
 
 ##### Data preparation #####
 #Read crop yield data for the Northeast Seaboard Region used in Jeong et al. (2016).
@@ -23,139 +56,117 @@ crop<-read.table(file="./L08-potato.csv", sep= ",", header = T)
 crop<-crop[crop$obs_yield >= 0.0,]
 tmpdf<-na.omit(crop)
 
-## Count the number of remaining valid observations
-## divide them randomly into training and test data
-n <- nrow(tmpdf)
-indextrain <- sample(1:n,round(0.7*n))
-crop.traindf<-tmpdf[indextrain,]
-crop.testdf <-tmpdf[-indextrain,]
+## divide observations randomly into 70% training data and the rest as test data
+split <- initial_split(tmpdf, 0.7)
+train_dataset <- training(split)
+test_dataset <- testing(split)
 
 ##### Generalized Linear Model (GLM) ######
 # Apply multiple linear regression to predict obs_yield based on input variables
 # GLM is a benchmark
 # model training
-crop.glm<-lm(obs_yield ~ clay + bulk + water + hyd + sat+ precip + maxt + mint + rad +lat+elev, data = crop.traindf)
-summary(crop.glm)
+glm<-lm(obs_yield ~ clay + bulk + water + hyd + sat+ precip + maxt + mint + rad +lat+elev, data = train_dataset)
+summary(glm)
 
 # Plot training result
 layout(matrix(c(1),1,1)) # graph configuration/page 
 
-plot(crop.traindf$obs_yield, crop.glm$fitted.values, main = "Multiple Linear Regression: Training",
+plot(train_dataset$obs_yield, glm$fitted.values, main = "Multiple Linear Regression: Training",
      xlab = "Observed (tons/ha)", ylab = "Predicted (tons/ha)",
      pch = 1, frame = FALSE)
-abline(lm(crop.glm$fitted.values ~ crop.traindf$obs_yield, data = crop.traindf), col = "blue")
+abline(lm(glm$fitted.values ~ train_dataset$obs_yield, data = train_dataset), col = "blue")
 abline(a = 0, b = 1, col = "red")
 
 # model evaluation with independent data and plot the result
-crop.glm.test.pred<-predict(crop.glm, newdata = crop.testdf)
-plot(crop.testdf$obs_yield, crop.glm.test.pred, main = "Multiple Linear Regression: Evaluation",
+glm.test.pred<-predict(glm, newdata = test_dataset)
+plot(test_dataset$obs_yield, glm.test.pred, main = "Multiple Linear Regression: Evaluation",
      xlab = "Observed (tons/ha)", ylab = "Predicted (tons/ha)",
      pch = 1, frame = FALSE)
-abline(lm(crop.glm.test.pred ~ crop.testdf$obs_yield, data = crop.testdf), col = "blue")
+abline(lm(glm.test.pred ~ test_dataset$obs_yield, data = test_dataset), col = "blue")
 abline(a = 0, b = 1, col = "red")
 
 ##### Random Forests (RF) #####
 # RF model training
-crop.rf<-randomForest(obs_yield ~., data = crop.traindf, ntree = 500, keepforest = T)  
-crop.rf
-summary(crop.rf)
-importance(crop.rf)
-varImpPlot(crop.rf)
-hist (treesize(crop.rf))
+rf<-randomForest(obs_yield ~., data = train_dataset, ntree = 500, keepforest = T)  
+rf
+summary(rf)
+importance(rf)
+varImpPlot(rf)
+hist (treesize(rf))
 
 # Plot training result
 layout(matrix(c(1),1,1)) # graph configuration/page 
-plot(crop.traindf$obs_yield, crop.rf$predicted, main = "Random Forests: Training",
+plot(train_dataset$obs_yield, rf$predicted, main = "Random Forests: Training",
      xlab = "Observed (tons/ha)", ylab = "Predicted (tons/ha)",
      pch = 1, frame = FALSE)
-abline(lm(crop.rf$predicted ~ crop.traindf$obs_yield, data = crop.traindf), col = "blue")
+abline(lm(rf$predicted ~ train_dataset$obs_yield, data = train_dataset), col = "blue")
 abline(a = 0, b = 1, col = "red")
 
 # RF model evaluation with independent data
-crop.rf.test.pred <-predict(crop.rf, newdata = crop.testdf)
+rf.test.pred <-predict(rf, newdata = test_dataset)
 # Plot evaluation result
-plot(crop.testdf$obs_yield, crop.rf.test.pred, main = "Random Forests: Testing",
+plot(test_dataset$obs_yield, rf.test.pred, main = "Random Forests: Testing",
      xlab = "Observed (tons/ha)", ylab = "Predicted (tons/ha)",
      pch = 1, frame = FALSE)
-abline(lm(crop.rf.test.pred ~ crop.testdf$obs_yield, data = crop.testdf), col = "blue")
+abline(lm(rf.test.pred ~ test_dataset$obs_yield, data = test_dataset), col = "blue")
 abline(a = 0, b = 1, col = "red")
 
 
 ##### Deep Neural Network (DNN) using TensorFlow #####
-# to use this package, you might have to install Anaconda/Miniconda first.
-# See: https://docs.conda.io/en/latest/miniconda.html
-# Or install/update TensorFlow package of your Python environment separately.
-# see: https://www.tensorflow.org/install 
-# For RStudio installation: https://tensorflow.rstudio.com/installation/
+# For RStudio installation of TensorFlow: https://tensorflow.rstudio.com/installation/
 # Code below is based on the regression tutorial at:
-# https://tensorflow.rstudio.com/tutorials/beginners/basic-ml/
+# https://tensorflow.rstudio.com/tutorials/keras/regression
 
-#install.packages("tensorflow")
-#install.packages("keras")
-#install.packages("tfdatasets")
-#install.packages("progress")
-#install.packages("reticulate") # This is likely to have been installed already.
+#Skim the data set
+skimr::skim(train_dataset)
 
-library(tensorflow)
-library(keras)
-library(tfdatasets)
-library(progress)
-library(reticulate)
+#Split features from labels
+#Separate the target value—the “label”—from the features. 
+#This label is the value that you will train the model to predict.
 
-# Use local python
-use_python("/opt/conda/bin/python")
+train_features <- train_dataset %>% select(-obs_yield)
+test_features <- test_dataset %>% select(-obs_yield)
 
-# If needed, install miniconda in RStudio environment.
-# This step may be necessary, if you get an error that a Python env is not found.
+train_labels <- train_dataset %>% select(obs_yield)
+test_labels <- test_dataset %>% select(obs_yield)
 
-#install_miniconda() # install miniconda if not installed.
-#miniconda_path() # install miniconda path if installed.
-#miniconda_update() # update miniconda
+# For NN, data for different variables are put into the same scale
+# That is, driving variables are normalized to scale their effects
+# See: https://tensorflow.rstudio.com/reference/keras/layer_normalization
+normalizer <- layer_normalization(axis = -1L)
+normalizer %>% adapt(as.matrix(train_features))
 
-# if first time to run TensorFlow, run the next two lines.
-# install_tensorflow()
-# install_keras()
-# you need to install tensorflow only once. Once installed, comment the above two lines. 
+# Once normalized, the meanings of variables are no longer applicable
+# As we can see here.
+print(normalizer$mean)
+first <- as.matrix(train_features[1,])
+cat('First example:', first)
+cat('Normalized:', as.matrix(normalizer(first)))
 
-# Test if installed properly
-tf$constant("Hellow Tensorflow")
-
-# normalize driving variables to scale their effects
-spec <- feature_spec(crop.traindf, obs_yield ~ . ) %>% 
-  step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% 
-  fit()
-
-spec
-
-# create neural network layers
-layer <- layer_dense_features(
-  feature_columns = dense_features(spec), 
-  dtype = tf$float32)
-layer(dict(crop.traindf))
-
-#summary(model)
-
-# create a function to build a DNN model
-build_model <- function() {
-  input <- layer_input_from_dataset(crop.traindf %>% select(-obs_yield))
+# Create a DNN model with a few layers of neural network including “hidden” layers. 
+# The name “hidden” here just means not directly connected to the inputs or outputs.
+# The first layer is a normalization layer we just created.
+# Two hidden, non-linear, Dense layers are added with the ReLU (relu) function.
+# Another layer of linear Dense single-output is the added.
+# Define a DNN model to be built and compiled using MAE (loss) as optimizer.
+build_and_compile_model <- function(norm) {
+  model <- keras_model_sequential() %>%
+    norm() %>%
+    layer_dense(64, activation = 'relu') %>%
+    layer_dense(64, activation = 'relu') %>%
+    layer_dense(1)
   
-  output <- input %>% 
-    layer_dense_features(dense_features(spec)) %>% 
-    layer_dense(units = 64, activation = "relu") %>%
-    layer_dense(units = 64, activation = "relu") %>%
-    layer_dense(units = 1) 
-  
-  model <- keras_model(input, output)
-  
-  model %>% 
-    compile(
-      loss = "mse",
-      optimizer = optimizer_rmsprop(),
-      metrics = list("mean_absolute_error")
-    )
+  model %>% compile(
+    loss = 'mean_absolute_error',
+    optimizer = optimizer_adam(0.001)
+  )
   
   model
 }
+
+# Build an instance of the DNN model using normalized data
+dnn_model <- build_and_compile_model(normalizer)
+summary(dnn_model)
 
 # Display training progress by printing a single dot for each completed epoch.
 print_dot_callback <- callback_lambda(
@@ -165,56 +176,67 @@ print_dot_callback <- callback_lambda(
   }
 )    
 
-model <- build_model()
-
-history <- model %>% fit(
-  x = crop.traindf %>% select(-obs_yield),
-  y = crop.traindf$obs_yield,
-  epochs = 500,
+# Train DNN model (i.e., calibrate)
+# Be patient. It takes a while.
+# Uncomment 'callbacks' to see the progress but will slows it down further
+history <- dnn_model %>% fit(
+  as.matrix(train_features),
+  as.matrix(train_labels),
   validation_split = 0.2,
   verbose = 0,
-  callbacks = list(print_dot_callback)
+  epochs = 200,
+#  callbacks = list(print_dot_callback)
 )
+
+# Plot the history of training.
+# 'epochs' is like iterations of training
 plot(history)
 
+# Collect test results with data not used for training
+test_results <- list()
+test_results[['dnn_model']] <- dnn_model %>% evaluate(
+  as.matrix(test_features),
+  as.matrix(test_labels),
+  verbose = 0
+)
 
 # Plot training result
-crop.dnn.train.pred <- model %>% predict(crop.traindf %>% select(-obs_yield))
+dnn.train.pred <- predict(dnn_model,as.matrix(train_features))
 layout(matrix(c(1),1,1)) # graph configuration/page 
-plot(crop.traindf$obs_yield, crop.dnn.train.pred, main = "Deep Neural Network: Training",
+plot(train_dataset$obs_yield, dnn.train.pred, main = "Deep Neural Network: Training",
      xlab = "Observed (tons/ha)", ylab = "Predicted (tons/ha)",
      pch = 1, frame = FALSE)
-abline(lm(crop.dnn.train.pred ~ crop.traindf$obs_yield, data = crop.traindf), col = "blue")
+abline(lm(dnn.train.pred ~ train_dataset$obs_yield, data = train_dataset), col = "blue")
 abline(a = 0, b = 1, col = "red")
 
 # DNN model testing and plot result
-crop.dnn.test.pred <-model %>% predict(crop.testdf %>% select(-obs_yield))
-plot(crop.testdf$obs_yield, crop.dnn.test.pred, main = "Deep Neural Network: Testing",
+dnn.test.pred <-predict(dnn_model,as.matrix(test_features))
+plot(test_dataset$obs_yield, dnn.test.pred, main = "Deep Neural Network: Testing",
      xlab = "Observed (tons/ha)", ylab = "Predicted (tons/ha)",
      pch = 1, frame = FALSE)
-abline(lm(crop.dnn.test.pred ~ crop.testdf$obs_yield, data = crop.testdf), col = "blue")
+abline(lm(dnn.test.pred ~ test_dataset$obs_yield, data = test_dataset), col = "blue")
 abline(a = 0, b = 1, col = "red")
 
 ##### Model Performance Evaluations #####
 # compare model performance
-gof.test.glm <- gof(crop.testdf$obs_yield, crop.glm.test.pred)
-gof.test.rf <- gof(crop.testdf$obs_yield, crop.rf.test.pred)
-gof.test.dnn <- gof(crop.testdf$obs_yield, c(crop.dnn.test.pred))
+gof.test.glm <- gof(test_dataset$obs_yield, glm.test.pred)
+gof.test.rf <- gof(test_dataset$obs_yield, rf.test.pred)
+gof.test.dnn <- gof(test_dataset$obs_yield, c(dnn.test.pred))
 
 #pred vs obs
-p_o.test.glm <- lm(crop.glm.test.pred ~ crop.testdf$obs_yield)
-p_o.test.rf <- lm(crop.rf.test.pred ~ crop.testdf$obs_yield) # pred vs obs
-p_o.test.dnn <- lm(crop.dnn.test.pred ~ crop.testdf$obs_yield)
+p_o.test.glm <- lm(glm.test.pred ~ test_dataset$obs_yield)
+p_o.test.rf <- lm(rf.test.pred ~ test_dataset$obs_yield) # pred vs obs
+p_o.test.dnn <- lm(dnn.test.pred ~ test_dataset$obs_yield)
 
 # compare model performance for training data
-gof.train.glm <- gof(crop.traindf$obs_yield, crop.glm$fitted.values)
-gof.train.rf <- gof(crop.traindf$obs_yield, crop.rf$predicted)
-gof.train.dnn <- gof(crop.traindf$obs_yield, c(crop.dnn.train.pred))
+gof.train.glm <- gof(train_dataset$obs_yield, glm$fitted.values)
+gof.train.rf <- gof(train_dataset$obs_yield, rf$predicted)
+gof.train.dnn <- gof(train_dataset$obs_yield, c(dnn.train.pred))
 
 #pred vs obs
-p_o.train.glm <- lm(crop.glm$fitted.values~crop.traindf$obs_yield)
-p_o.train.rf <- lm(crop.rf$predicted~crop.traindf$obs_yield) # pred vs obs
-p_o.train.dnn <- lm(crop.dnn.train.pred ~ crop.traindf$obs_yield)
+p_o.train.glm <- lm(glm$fitted.values~train_dataset$obs_yield)
+p_o.train.rf <- lm(rf$predicted~train_dataset$obs_yield) # pred vs obs
+p_o.train.dnn <- lm(dnn.train.pred ~ train_dataset$obs_yield)
 
 performance <- cbind (gof.train.glm, gof.train.rf, gof.train.dnn, gof.test.glm, 
                       gof.test.rf, gof.test.dnn)
@@ -222,8 +244,8 @@ colnames(performance) <- c("train.glm", "train.rf", "train.dnn", "test.glm", "te
 
 #exporting output
 write.csv(performance, file = "performance_stats.csv")
-write.csv(cbind(crop.traindf, crop.rf$predicted, crop.glm$fitted.values, crop.dnn.train.pred), file = "crop_train_results.csv")
-write.csv(cbind(crop.testdf, crop.glm.test.pred, crop.rf.test.pred, crop.dnn.test.pred), file = "crop_test_results.csv")
+write.csv(cbind(train_dataset, rf$predicted, glm$fitted.values, dnn.train.pred), file = "crop_train_results.csv")
+write.csv(cbind(test_dataset, glm.test.pred, rf.test.pred, dnn.test.pred), file = "crop_test_results.csv")
 
 ##### Silage Corn Data for the same region used in Jeong et al. (2016) ##### 
 #silage<-read.table(file="./L08-silage.csv", sep= ",", header = T)
