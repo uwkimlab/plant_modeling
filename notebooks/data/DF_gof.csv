@@ -1,0 +1,4 @@
+model,RMSE,EF,d_r
+linear,0.8863133917720668 m,0.0,0.0
+exponential,0.0 m,0.0,0.0
+logistic,0.0 m,0.0,0.0
